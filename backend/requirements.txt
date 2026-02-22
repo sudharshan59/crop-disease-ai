@@ -1,0 +1,39 @@
+# Crop Disease AI - Backend Dependencies
+
+# Web Framework
+fastapi==0.129.2
+uvicorn[standard]==0.41.0
+python-multipart==0.0.22
+
+# Data Validation
+pydantic==2.12.5
+pydantic-settings==2.13.1
+
+# Deep Learning (PyTorch)
+torch==2.10.0
+torchvision==0.25.0
+
+# Computer Vision
+opencv-python-headless==4.13.0.92
+Pillow==12.1.1
+
+# Database
+aiosqlite==0.22.1
+
+# VLM - GGUF Backend (CPU-friendly, LLaVA-Phi-3-Mini INT4)
+# Install with prebuilt wheel (no C++ compiler needed):
+#   pip install llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+llama-cpp-python==0.3.2
+
+# Model Download
+huggingface-hub==1.4.1
+
+# LLM - HuggingFace/bitsandbytes Backend (GPU, optional)
+# Uncomment below if using bitsandbytes backend with GPU:
+# transformers>=4.36.0
+# accelerate>=0.25.0
+# bitsandbytes>=0.43.0
+
+# Utilities
+python-dotenv==1.2.1
+numpy==2.4.2
