@@ -118,8 +118,8 @@ class Settings(BaseSettings):
         description="Maximum tokens for LLM generation (treatment text only)",
     )
     LLM_TEMPERATURE: float = Field(
-        default=0.0,
-        description="Temperature for VLM generation (0 = greedy, fastest)",
+        default=0.7,
+        description="Temperature for VLM generation (0.0-1.0, higher = more creative)",
     )
     LLM_CONTEXT_LENGTH: int = Field(
         default=1024,
