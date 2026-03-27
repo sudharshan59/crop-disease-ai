@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PredictionResult } from "@/lib/api";
 import SeverityBadge from "./SeverityBadge";
 
@@ -13,15 +13,27 @@ type TabKey = "symptoms" | "cause" | "chemical" | "organic" | "prevention";
 
 export default function Result({ result, imagePreview }: ResultProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("symptoms");
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const confidencePercent = (result.confidence * 100).toFixed(1);
   const isHealthy = result.severity === "healthy";
 
+  // Prefer structured `sections` when available to provide summaries, details, and bullets
+  const sectionMap = new Map<string, any>();
+  (result.recommendation.sections || []).forEach((s) => {
+    if (s && s.id) sectionMap.set(s.id, s);
+  });
+
   const tabContent: Record<TabKey, string> = {
-    symptoms: result.recommendation.visible_symptoms || "No symptoms detected.",
-    cause: result.recommendation.probable_cause || "Unknown cause.",
-    chemical: result.recommendation.treatment?.chemical_control || "No chemical treatment recommended.",
-    organic: result.recommendation.treatment?.organic_control || "No organic treatment available.",
-    prevention: result.recommendation.prevention || "Follow standard crop management practices.",
+    symptoms:
+      sectionMap.get("symptoms")?.detail || result.recommendation.visible_symptoms || "No symptoms detected.",
+    cause:
+      sectionMap.get("cause")?.detail || result.recommendation.probable_cause || "Unknown cause.",
+    chemical:
+      sectionMap.get("chemical")?.detail || result.recommendation.treatment?.chemical_control || "No chemical treatment recommended.",
+    organic:
+      sectionMap.get("organic")?.detail || result.recommendation.treatment?.organic_control || "No organic treatment available.",
+    prevention:
+      sectionMap.get("prevention")?.detail || result.recommendation.prevention || "Follow standard crop management practices.",
   };
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
@@ -243,6 +255,148 @@ export default function Result({ result, imagePreview }: ResultProps) {
           </p>
         </div>
       </div>
+      {/* Structured Sections (bullets + details) */}
+      {(result.recommendation.sections || []).length > 0 && (
+        <div className="card">
+          <h4 className="section-title">Details</h4>
+          <div className="space-y-6 mt-4">
+            {result.recommendation.sections?.map((s) => (
+              <div key={s.id} className="bg-white rounded-lg p-4 border">
+                <div className="flex items-center justify-between">
+                  <h5 className="font-semibold text-leaf-700">{s.title}</h5>
+                  {s.summary && <span className="text-sm text-gray-500">{s.summary}</span>}
+                </div>
+                {s.bullets && s.bullets.length > 0 && (
+                  <ul className="list-disc list-inside mt-3 text-sm text-gray-700 space-y-1">
+                    {s.bullets.map((b: string, idx: number) => (
+                      <li key={idx} className="leading-relaxed">{b}</li>
+                    ))}
+                  </ul>
+                )}
+                {s.detail && (
+                  <div className="text-sm text-gray-700 mt-3">
+                    {renderDetail(s.id, s.detail)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Weekly plan */}
+      {(result.recommendation.weekly_plan || []).length > 0 && (
+        <div className="card">
+          <h3 className="section-title">4-Week Action Plan</h3>
+          <p className="section-subtitle mb-4">A concise weekly checklist to manage the issue</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {result.recommendation.weekly_plan?.map((w, i) => (
+              <div key={i} className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold mb-2">{w.week}</h4>
+                <ul className="list-disc list-inside text-sm text-gray-700">
+                  {w.actions.map((a: string, idx: number) => (
+                    <li key={idx}>{a}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Helper: renderDetail splits long text into paragraphs and provides a simple Read more toggle
+function renderDetail(id: string, detail: string) {
+  // Split by double newlines or sentence boundaries for natural paragraphs
+  const paragraphs = detail
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  // If no explicit paragraphs, split into sentences of ~40-60 words
+  const chunked = paragraphs.length
+    ? paragraphs
+    : detail.match(/[^.!?]+[.!?]+[\])'"\s]*/g)?.map((s) => s.trim()) || [detail];
+
+  // Keep first two chunks visible, collapse the rest behind a Read more
+  const visible = chunked.slice(0, 2);
+  const hidden = chunked.slice(2);
+
+  // Use a lightweight client-side toggle by id (window-level) to avoid prop drilling
+  const key = `section_expanded_${id}`;
+  const isExpanded = typeof window !== "undefined" && !!(window as any)[key];
+
+  const toggle = () => {
+    if (typeof window === "undefined") return;
+    (window as any)[key] = !(window as any)[key];
+    // force a re-render by dispatching a custom event the component can listen to
+    window.dispatchEvent(new Event("sectionToggle"));
+  };
+
+  // Small component to render paragraphs; using React isn't possible here simply,
+  // but we will return a fragment-like structure via JSX in parent scope. To keep
+  // logic local, return a JSX element directly.
+  return (
+    <DetailRenderer
+      id={id}
+      visible={visible}
+      hidden={hidden}
+      isExpanded={isExpanded}
+      onToggle={toggle}
+    />
+  );
+}
+
+function DetailRenderer({
+  id,
+  visible,
+  hidden,
+  isExpanded,
+  onToggle,
+}: any) {
+  // Listen for window toggle events to re-render when global flag changes
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => setTick((t) => t + 1);
+    window.addEventListener("sectionToggle", handler);
+    return () => window.removeEventListener("sectionToggle", handler);
+  }, []);
+
+  return (
+    <div>
+      {visible.map((p: string, i: number) => (
+        <p key={`v-${i}`} className="mb-2 leading-relaxed text-sm">
+          {p}
+        </p>
+      ))}
+
+      {hidden.length > 0 && !isExpanded && (
+        <button
+          onClick={onToggle}
+          className="text-sm text-leaf-600 font-medium mt-1"
+        >
+          Read more
+        </button>
+      )}
+
+      {hidden.length > 0 && isExpanded && (
+        <div>
+          {hidden.map((p: string, i: number) => (
+            <p key={`h-${i}`} className="mb-2 leading-relaxed text-sm">
+              {p}
+            </p>
+          ))}
+          <button
+            onClick={onToggle}
+            className="text-sm text-leaf-600 font-medium mt-1"
+          >
+            Show less
+          </button>
+        </div>
+      )}
     </div>
   );
 }

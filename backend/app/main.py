@@ -15,7 +15,7 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -142,6 +142,10 @@ async def predict_disease(
         description="Optional geographic region for context-aware recommendations",
         examples=["South Asia", "Southeast Asia", "Sub-Saharan Africa"],
     ),
+    treatment_params: Optional[str] = Form(
+        default=None,
+        description="Optional JSON string with treatment adjustment parameters (chemical_amount_g, water_amount_l, organic_amount_g, notes)",
+    ),
 ):
     """Analyze a leaf image for disease detection and generate treatment recommendations.
 
@@ -171,6 +175,16 @@ async def predict_disease(
             detail=f"Invalid file type: {file.content_type}. Please upload an image (JPEG, PNG).",
         )
 
+    # ── Read image bytes ──────────────────────────────────────────────────
+    try:
+        image_bytes = await file.read()
+        if not image_bytes:
+            raise HTTPException(status_code=400, detail="Empty file uploaded.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {str(e)}")
+
     # ── Check model availability ──────────────────────────────────────────
     if not classifier.is_loaded:
         raise HTTPException(
@@ -178,20 +192,22 @@ async def predict_disease(
             detail="CNN model is not loaded. Please check server logs.",
         )
 
-    # ── Read image bytes ──────────────────────────────────────────────────
-    try:
-        image_bytes = await file.read()
-        if not image_bytes:
-            raise HTTPException(status_code=400, detail="Empty file uploaded.")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {str(e)}")
+    # (image_bytes already read above)
+
+    # Parse treatment params (if provided)
+    tparams = None
+    if treatment_params:
+        try:
+            tparams = __import__("json").loads(treatment_params)
+        except Exception:
+            tparams = None
 
     # ── Run inference pipeline in executor (avoid blocking event loop) ────
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(
             None,
-            lambda: _run_prediction_pipeline(image_bytes, region),
+            lambda: _run_prediction_pipeline(image_bytes, region, tparams),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -239,11 +255,13 @@ async def predict_disease(
             treatment=treatment_obj,
             prevention=rec.get("prevention", ""),
             confidence=rec.get("confidence", "Medium"),
+            sections=rec.get("sections", []),
+            weekly_plan=rec.get("weekly_plan", []),
         ),
     )
 
 
-def _run_prediction_pipeline(image_bytes: bytes, region: Optional[str] = None) -> dict:
+def _run_prediction_pipeline(image_bytes: bytes, region: Optional[str] = None, treatment_params: Optional[dict] = None) -> dict:
     """Execute the full prediction pipeline (blocking, runs in executor).
 
     Args:
@@ -256,24 +274,57 @@ def _run_prediction_pipeline(image_bytes: bytes, region: Optional[str] = None) -
     # Step 1: Preprocess image
     tensor, diseased_area_ratio = preprocess_image(image_bytes, apply_segmentation=True)
 
-    # Step 2: CNN inference
-    class_idx, class_label, display_name, confidence, probabilities = classifier.predict(tensor)
+    # Step 2: CNN inference (run primary and optional alternate, choose winner)
+    dual = dual_result = None
+    try:
+        from app import model as model_module
+        dual = model_module.dual_predict(tensor)
+    except Exception:
+        # fallback to single prediction
+        class_idx, class_label, display_name, confidence, probabilities = classifier.predict(tensor)
+        dual = {
+            "primary": {
+                "class_index": class_idx,
+                "class_label": class_label,
+                "display_name": display_name,
+                "confidence": confidence,
+                "probabilities": probabilities,
+            },
+            "alternate": None,
+            "winner": {
+                "class_index": class_idx,
+                "class_label": class_label,
+                "display_name": display_name,
+                "confidence": confidence,
+            },
+            "loser": None,
+        }
 
     # Step 3: Severity estimation
+    # Ensure we have a valid winner; fall back to single predict if not
+    if not dual or "winner" not in dual or dual.get("winner") is None:
+        class_idx, class_label, display_name, confidence, probabilities = classifier.predict(tensor)
+        disease_name = display_name
+    else:
+        winner = dual.get("winner")
+        disease_name = winner.get("display_name") or winner.get("disease_name")
+        confidence = winner.get("confidence")
+        class_label = winner.get("class_label")
     is_healthy = classifier.is_healthy(class_label)
     severity = estimate_severity(confidence, is_healthy, diseased_area_ratio)
 
     # Step 4: Generate recommendation (VLM analyzes image directly)
     recommendation = recommendation_engine.generate_recommendation(
-        disease=display_name,
+        disease=disease_name,
         confidence=confidence,
         severity=severity,
         region=region,
         image_bytes=image_bytes,
+        treatment_params=treatment_params,
     )
 
     return {
-        "disease": display_name,
+        "disease": disease_name,
         "confidence": confidence,
         "severity": severity,
         "recommendation": recommendation,

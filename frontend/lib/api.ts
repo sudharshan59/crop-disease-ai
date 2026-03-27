@@ -25,6 +25,17 @@ export interface Recommendation {
   treatment: Treatment;
   prevention: string;
   confidence: string;
+  sections?: Array<{
+    id: string;
+    title: string;
+    summary?: string;
+    detail?: string;
+    bullets?: string[];
+  }>;
+  weekly_plan?: Array<{
+    week: string;
+    actions: string[];
+  }>;
 }
 
 export interface PredictionResult {
@@ -68,11 +79,15 @@ export interface HealthStatus {
  */
 export async function predictDisease(
   file: File,
-  region?: string
+  region?: string,
+  treatmentParams?: Record<string, any>
 ): Promise<PredictionResult> {
   const formData = new FormData();
   formData.append("file", file);
   if (region) formData.append("region", region);
+  if (treatmentParams) {
+    formData.append("treatment_params", JSON.stringify(treatmentParams));
+  }
 
   const { data } = await api.post<PredictionResult>(
     "/api/predict",
