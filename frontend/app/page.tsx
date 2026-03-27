@@ -12,7 +12,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, treatmentParams?: Record<string, any>) => {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -22,7 +22,7 @@ export default function HomePage() {
     setImagePreview(previewUrl);
 
     try {
-      const prediction = await predictDisease(file);
+      const prediction = await predictDisease(file, undefined, treatmentParams);
       setResult(prediction);
     } catch (err: unknown) {
       const message =

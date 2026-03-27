@@ -13,6 +13,8 @@ import signal
 import socket
 import subprocess
 import sys
+from huggingface_hub import login
+login()
 
 import uvicorn
 from app.config import settings

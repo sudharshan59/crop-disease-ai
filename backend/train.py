@@ -193,29 +193,30 @@ def load_dataset(data_dir: str, train_ratio: float = 0.8, val_ratio: float = 0.1
 # ══════════════════════════════════════════════════════════════════════════════
 
 def build_model(num_classes: int, freeze_backbone: bool = True) -> nn.Module:
-    """Build ResNet18 with pretrained ImageNet weights and modified FC layer.
+    """Build EfficientNet-B0 with pretrained ImageNet weights and modified head.
 
-    Args:
-        num_classes: Number of output classes.
-        freeze_backbone: Whether to freeze early layers initially.
-
-    Returns:
-        Modified ResNet18 model.
+    EfficientNet-B0 offers a better accuracy/size tradeoff for mobile/edge
+    deployments compared with ResNet18.
     """
-    model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+    try:
+        model = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.IMAGENET1K_V1)
+        # Replace classifier
+        in_features = model.classifier[1].in_features if isinstance(model.classifier, nn.Sequential) else model.classifier.in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(in_features, num_classes))
+    except Exception:
+        # Fallback to ResNet18 if EfficientNet not available in torchvision
+        model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+        in_features = model.fc.in_features
+        model.fc = nn.Linear(in_features, num_classes)
 
-    # Freeze all layers except layer4 and fc (if requested)
+    # Freeze backbone if requested (freeze all except final blocks)
     if freeze_backbone:
         for name, param in model.named_parameters():
-            if "layer4" not in name and "fc" not in name:
+            if "classifier" not in name and "fc" not in name:
                 param.requires_grad = False
-        logger.info("Backbone frozen (except layer4 and fc).")
+        logger.info("Backbone frozen (except classifier head).")
 
-    # Replace final FC layer
-    in_features = model.fc.in_features
-    model.fc = nn.Linear(in_features, num_classes)
-    logger.info(f"FC layer replaced: {in_features} → {num_classes}")
-
+    logger.info(f"Classifier head replaced: → {num_classes} classes")
     return model
 
 

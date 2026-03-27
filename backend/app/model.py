@@ -18,25 +18,28 @@ from app.config import settings, NUM_CLASSES, DISEASE_CLASSES, DISEASE_DISPLAY_N
 logger = logging.getLogger(__name__)
 
 
-def build_resnet18(num_classes: int = NUM_CLASSES, pretrained: bool = False) -> nn.Module:
-    """Build a ResNet18 model with a modified final FC layer.
+def build_model(num_classes: int = NUM_CLASSES, pretrained: bool = True) -> nn.Module:
+    """Build an EfficientNet-B0 model with a modified classifier head.
 
-    Args:
-        num_classes: Number of output classes (default: 16).
-        pretrained: Whether to load ImageNet pretrained weights.
-
-    Returns:
-        Modified ResNet18 model.
+    Uses torchvision EfficientNet-B0 for a good accuracy/size tradeoff on
+    edge devices. Default uses ImageNet pretrained weights.
     """
-    if pretrained:
-        weights = models.ResNet18_Weights.IMAGENET1K_V1
-    else:
-        weights = None
+    try:
+        weights = models.EfficientNet_B0_Weights.IMAGENET1K_V1 if pretrained else None
+        model = models.efficientnet_b0(weights=weights)
+    except Exception:
+        # Fallback: if torchvision older version lacks efficientnet, use resnet18
+        weights = models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
+        model = models.resnet18(weights=weights)
 
-    model = models.resnet18(weights=weights)
-    # Replace final fully connected layer for our classification task
-    in_features = model.fc.in_features  # 512 for ResNet18
-    model.fc = nn.Linear(in_features, num_classes)
+    # Replace classifier head
+    if hasattr(model, "classifier"):
+        in_features = model.classifier[1].in_features if isinstance(model.classifier, nn.Sequential) else model.classifier.in_features
+        model.classifier = nn.Sequential(nn.Dropout(p=0.2), nn.Linear(in_features, num_classes))
+    else:
+        in_features = model.fc.in_features
+        model.fc = nn.Linear(in_features, num_classes)
+
     return model
 
 
@@ -89,7 +92,8 @@ class DiseaseClassifier:
                     "Predictions will vary by image but won't be accurate. "
                     "Run train.py to train a proper model."
                 )
-                self.model = build_resnet18(num_classes=NUM_CLASSES, pretrained=True)
+                # build_model provides EfficientNet-B0 or fallback ResNet18
+                self.model = build_model(num_classes=NUM_CLASSES, pretrained=True)
 
             # Move to device and set to eval mode
             self.model = self.model.to(self.device)
@@ -169,3 +173,128 @@ class DiseaseClassifier:
 
 # ─── Module-level Singleton ──────────────────────────────────────────────────
 classifier = DiseaseClassifier()
+
+def _load_second_model(path: str, device: str) -> Optional[nn.Module]:
+    """Helper to load an alternate model from a given path.
+
+    Returns the loaded model on success, or None on failure.
+    """
+    try:
+        p = Path(path)
+        if not p.exists():
+            return None
+        # Try TorchScript first if file is a .pt
+        if p.suffix == ".pt":
+            m = torch.jit.load(str(p), map_location=device)
+            m.eval()
+            return m.to(device)
+        else:
+            # Assume it's a state_dict compatible with our ResNet18 architecture
+            m = build_resnet18(num_classes=NUM_CLASSES, pretrained=False)
+            state_dict = torch.load(str(p), map_location=device, weights_only=True)
+            m.load_state_dict(state_dict)
+            m = m.to(device)
+            m.eval()
+            return m
+    except Exception:
+        return None
+
+
+def _choose_higher(pred1, pred2):
+    """Return the prediction tuple with higher confidence between two results.
+
+    Each pred is (class_index, class_label, display_name, confidence, probabilities).
+    """
+    if pred2 is None:
+        return pred1, None
+    if pred1 is None:
+        return pred2, None
+    return (pred1, pred2) if pred1[3] >= pred2[3] else (pred2, pred1)
+
+
+def dual_predict(tensor: torch.Tensor) -> dict:
+    """Run inference with the primary loaded model and an alternate model (if present).
+
+    The alternate model path searched (in order): `settings.TORCHSCRIPT_PATH`,
+    `settings.MODEL_PATH` (if different from the loaded model path), and
+    `models/alt_plant_disease_model.pth` in the models folder.
+
+    Returns a dict containing both predictions and a `winner` field with the
+    higher-confidence result.
+    """
+    # Primary prediction
+    try:
+        primary = classifier.predict(tensor)
+    except Exception as e:
+        raise
+
+    # Attempt to locate alternate model files
+    alt_paths = []
+    try:
+        # prefer TorchScript alternate
+        if settings.TORCHSCRIPT_PATH:
+            alt_paths.append(settings.TORCHSCRIPT_PATH)
+        # alternate weights path (avoid same as primary MODEL_PATH)
+        if settings.MODEL_PATH and settings.MODEL_PATH not in alt_paths:
+            alt_paths.append(settings.MODEL_PATH)
+        # fallback alt path in models folder
+        alt_paths.append(str(Path(settings.MODELS_DIR) / "alt_plant_disease_model.pth"))
+    except Exception:
+        alt_paths = []
+
+    alt_pred = None
+    for p in alt_paths:
+        # skip if identical to primary model file
+        try:
+            if p and Path(p).exists():
+                # load alternate model temporarily
+                alt_model = _load_second_model(p, classifier.device)
+                if alt_model is None:
+                    continue
+                # run inference with alt_model
+                with torch.no_grad():
+                    t = tensor.to(classifier.device)
+                    outputs = alt_model(t)
+                    probs = torch.softmax(outputs, dim=1)
+                    conf, idx = torch.max(probs, dim=1)
+                    idx_i = idx.item()
+                    conf_f = round(conf.item(), 4)
+                    prob_list = probs.squeeze().tolist()
+                    class_label = DISEASE_CLASSES[idx_i]
+                    display_name = DISEASE_DISPLAY_NAMES.get(class_label, class_label)
+                    alt_pred = (idx_i, class_label, display_name, conf_f, prob_list)
+                    break
+        except Exception:
+            continue
+
+    # Decide winner
+    winner, loser = _choose_higher(primary, alt_pred)
+
+    return {
+        "primary": {
+            "class_index": primary[0],
+            "class_label": primary[1],
+            "display_name": primary[2],
+            "confidence": primary[3],
+            "probabilities": primary[4],
+        },
+        "alternate": None if alt_pred is None else {
+            "class_index": alt_pred[0],
+            "class_label": alt_pred[1],
+            "display_name": alt_pred[2],
+            "confidence": alt_pred[3],
+            "probabilities": alt_pred[4],
+        },
+        "winner": {
+            "class_index": winner[0],
+            "class_label": winner[1],
+            "display_name": winner[2],
+            "confidence": winner[3],
+        },
+        "loser": None if loser is None else {
+            "class_index": loser[0],
+            "class_label": loser[1],
+            "display_name": loser[2],
+            "confidence": loser[3],
+        }
+    }
