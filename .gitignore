@@ -41,3 +41,6 @@ Thumbs.db
 # ── Logs ─────────────────────────────────────────────────
 *.log
 npm-debug.log*
+
+# Ignore GitHub tooling and workflows folder
+.github/
