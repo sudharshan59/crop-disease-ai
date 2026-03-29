@@ -299,12 +299,6 @@ export default function Upload({ onUpload }: UploadProps) {
           : "Use your camera to scan a leaf or upload an image file"}
       </p>
 
-      {errorMessage && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 flex items-start justify-between">
-          <div className="text-sm">{errorMessage}</div>
-          <button onClick={() => setErrorMessage(null)} className="ml-4 text-sm font-semibold text-red-700">Dismiss</button>
-        </div>
-      )}
 
       {/* ── Choose mode ─────────────────────────────── */}
       {mode === "choose" && (
@@ -572,6 +566,12 @@ export default function Upload({ onUpload }: UploadProps) {
               </svg>
             </button>
           </div>
+
+          {errorMessage && (
+            <div className="mt-3 mb-1 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3">
+              <div className="text-sm">{errorMessage}</div>
+            </div>
+          )}
 
           {selectedFile && (
             <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
