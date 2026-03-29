@@ -36,6 +36,11 @@ export default function Result({ result, imagePreview }: ResultProps) {
       sectionMap.get("prevention")?.detail || result.recommendation.prevention || "Follow standard crop management practices.",
   };
 
+  // Only show Details sections that match the currently active tab
+  const visibleSections = (result.recommendation.sections || []).filter(
+    (s) => s && s.id === activeTab
+  );
+
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     {
       key: "symptoms",
@@ -256,15 +261,17 @@ export default function Result({ result, imagePreview }: ResultProps) {
         </div>
       </div>
       {/* Structured Sections (bullets + details) */}
-      {(result.recommendation.sections || []).length > 0 && (
+      {visibleSections.length > 0 && (
         <div className="card">
           <h4 className="section-title">Details</h4>
           <div className="space-y-6 mt-4">
-            {result.recommendation.sections?.map((s) => (
+            {visibleSections.map((s) => (
               <div key={s.id} className="bg-white rounded-lg p-4 border">
-                <div className="flex items-center justify-between">
-                  <h5 className="font-semibold text-leaf-700">{s.title}</h5>
-                  {s.summary && <span className="text-sm text-gray-500">{s.summary}</span>}
+                <div>
+                  <h5 className="font-semibold text-leaf-700 mb-2">{s.title}</h5>
+                  {s.summary && (
+                    <p className="text-sm text-gray-500 mb-2">{s.summary}</p>
+                  )}
                 </div>
                 {s.bullets && s.bullets.length > 0 && (
                   <ul className="list-disc list-inside mt-3 text-sm text-gray-700 space-y-1">
@@ -285,7 +292,7 @@ export default function Result({ result, imagePreview }: ResultProps) {
       )}
 
       {/* Weekly plan */}
-      {(result.recommendation.weekly_plan || []).length > 0 && (
+      {activeTab === "prevention" && (result.recommendation.weekly_plan || []).length > 0 && (
         <div className="card">
           <h3 className="section-title">4-Week Action Plan</h3>
           <p className="section-subtitle mb-4">A concise weekly checklist to manage the issue</p>

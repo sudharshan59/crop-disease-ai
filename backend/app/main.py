@@ -323,6 +323,17 @@ def _run_prediction_pipeline(image_bytes: bytes, region: Optional[str] = None, t
         treatment_params=treatment_params,
     )
 
+    # Log end of pipeline for traceability
+    try:
+        logger.info(
+            "Prediction complete: disease=%s confidence=%.3f severity=%s",
+            disease_name,
+            confidence,
+            severity,
+        )
+    except Exception:
+        pass
+
     return {
         "disease": disease_name,
         "confidence": confidence,

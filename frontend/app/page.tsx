@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Upload from "./components/Upload";
 import Result from "./components/Result";
 import Loader from "./components/Loader";
-import { predictDisease, PredictionResult } from "@/lib/api";
+import { predictDisease, PredictionResult, healthCheck } from "@/lib/api";
 
 export default function HomePage() {
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
   const handleUpload = async (file: File, treatmentParams?: Record<string, any>) => {
     setLoading(true);
@@ -32,6 +33,27 @@ export default function HomePage() {
       setLoading(false);
     }
   };
+
+  // Fetch system health on mount to display which CNN model is loaded
+  useEffect(() => {
+    let mounted = true;
+    healthCheck()
+      .then((h) => {
+        if (!mounted) return;
+        try {
+          const name = h.cnn_model?.model_name || null;
+          setSelectedModel(name);
+        } catch (e) {
+          setSelectedModel(null);
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleReset = () => {
     setResult(null);
@@ -96,7 +118,7 @@ export default function HomePage() {
       {/* Loading State */}
       {loading && (
         <div className="max-w-2xl mx-auto">
-          <Loader imagePreview={imagePreview} />
+          <Loader imagePreview={imagePreview} modelName={selectedModel} />
         </div>
       )}
 

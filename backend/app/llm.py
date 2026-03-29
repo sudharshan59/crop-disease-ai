@@ -1432,6 +1432,48 @@ def _ensure_min_words_in_rec(rec: dict, min_words: int = 200) -> None:
         if not isinstance(to, str) or len(to.split()) < min_words:
             rec["treatment"]["organic_control"] = _expand_to_n_words(to if to else "Remove affected plant parts, improve air circulation, and use neem-based products or biological controls.", disease, n=min_words)
 
+    # Post-process treatment fields to remove repetition and improve formatting
+    try:
+        if isinstance(rec.get("treatment"), dict):
+            for key in ("chemical_control", "organic_control"):
+                txt = rec["treatment"].get(key, "")
+                if not txt or not isinstance(txt, str):
+                    continue
+                # First, deduplicate obvious verbatim repeats
+                txt = _deduplicate_text(txt)
+
+                # Split into sentences and remove near-duplicates while preserving order
+                sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', txt) if s.strip()]
+                seen = set()
+                unique_sents = []
+                for s in sents:
+                    norm = re.sub(r"[^a-z0-9 ]", "", s.lower())
+                    norm = re.sub(r"\s+", " ", norm).strip()
+                    if not norm:
+                        continue
+                    if norm in seen:
+                        continue
+                    seen.add(norm)
+                    unique_sents.append(s)
+
+                # Group sentences into short paragraphs (~3 sentences per paragraph)
+                paragraphs = []
+                for i in range(0, len(unique_sents), 3):
+                    para = " ".join(unique_sents[i:i+3]).strip()
+                    if para:
+                        paragraphs.append(para)
+
+                # If nothing remained after cleaning, keep original deduped text
+                final = "\n\n".join(paragraphs) if paragraphs else txt
+
+                # Ensure final ends with a period
+                if final and not final.endswith("."):
+                    final = final + "."
+
+                rec["treatment"][key] = final
+    except Exception:
+        pass
+
 
 # -- Module-level singleton --
 recommendation_engine = RecommendationEngine()

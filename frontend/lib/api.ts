@@ -65,8 +65,8 @@ export interface HistoryResponse {
 
 export interface HealthStatus {
   status: string;
-  model_loaded: boolean;
-  llm_loaded: boolean;
+  cnn_model: any;
+  llm_model: any;
   device: string;
 }
 

@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 
 export default function Loader({
   imagePreview,
+  modelName,
 }: {
   imagePreview: string | null;
+  modelName?: string | null;
 }) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -68,6 +70,9 @@ export default function Loader({
               ? "AI model is generating treatment recommendations..."
               : "AI is analyzing disease patterns and medicines — almost done..."}
           </p>
+          {modelName && (
+            <p className="text-xs text-gray-400 mt-2">Model: <span className="font-medium text-gray-700">{modelName}</span></p>
+          )}
           <p className="text-xs text-gray-400 mt-2">
             Elapsed: {elapsed}s
           </p>
@@ -83,7 +88,12 @@ export default function Loader({
           ].map((step, i) => (
             <div key={i} className="flex items-center gap-3">
               <div className={`w-2 h-2 rounded-full ${stepDot(step.threshold)} ${elapsed >= step.threshold && elapsed < step.threshold + 60 ? "animate-pulse" : ""}`} />
-              <span className={stepStatus(step.threshold)}>{step.label}</span>
+              <span className={stepStatus(step.threshold)}>
+                {step.label}
+                {step.label === "Running CNN disease classification" && modelName ? (
+                  <span className="text-xs text-gray-400 ml-2">— {modelName}</span>
+                ) : null}
+              </span>
             </div>
           ))}
         </div>

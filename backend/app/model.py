@@ -162,10 +162,32 @@ class DiseaseClassifier:
         Returns:
             Dictionary with model status details.
         """
+        # Determine a friendly model name based on what was loaded
+        try:
+            from app.config import settings
+            model_name = None
+            if self.is_torchscript and settings.TORCHSCRIPT_PATH:
+                model_name = Path(settings.TORCHSCRIPT_PATH).name
+            elif settings.MODEL_PATH and Path(settings.MODEL_PATH).exists():
+                model_name = Path(settings.MODEL_PATH).name
+            else:
+                # Fallback to the backbone name we built (EfficientNet or ResNet)
+                backbone = "EfficientNet-B0"
+                try:
+                    import torchvision.models as models
+                    if isinstance(self.model, models.ResNet):
+                        backbone = "ResNet18"
+                except Exception:
+                    pass
+                model_name = f"{backbone} (fallback)"
+        except Exception:
+            model_name = "unknown"
+
         return {
             "loaded": self.is_loaded,
             "device": self.device,
             "torchscript": self.is_torchscript,
+            "model_name": model_name,
             "num_classes": NUM_CLASSES,
             "classes": DISEASE_CLASSES,
         }

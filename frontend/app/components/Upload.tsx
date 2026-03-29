@@ -193,16 +193,60 @@ export default function Upload({ onUpload }: UploadProps) {
 
   // ---------- Actions ----------
   const handleAnalyze = () => {
-    if (selectedFile) {
-      const params: Record<string, any> = {};
-      if (chemicalAmount) params.chemical_amount_g = Number(chemicalAmount);
-      if (waterAmount) params.water_amount_l = Number(waterAmount);
-      if (organicAmount) params.organic_amount_g = Number(organicAmount);
-      if (notes) params.notes = notes;
-      if (inorganicOption) params.inorganic = inorganicOption === "other" ? inorganicOther || "other" : inorganicOption;
-      if (organicOption) params.organic = organicOption === "other" ? organicOther || "other" : organicOption;
-      onUpload(selectedFile, Object.keys(params).length ? params : undefined);
+    if (!selectedFile) {
+      setErrorMessage("Please upload or capture an image before analyzing.");
+      return;
     }
+
+    // Require either inorganic or organic selection
+    if (!inorganicOption && !organicOption) {
+      setErrorMessage("Please select either an Inorganic (chemical) or Organic option before analysis.");
+      return;
+    }
+
+    // Require water amount
+    const waterNum = Number(waterAmount);
+    if (!waterAmount || isNaN(waterNum) || waterNum <= 0) {
+      setErrorMessage("Please enter a valid Water amount in liters (e.g. 10).");
+      return;
+    }
+
+    // If inorganic selected, require chemical amount and 'other' name when applicable
+    if (inorganicOption) {
+      if (inorganicOption === "other" && !inorganicOther.trim()) {
+        setErrorMessage("Please specify the chemical name for 'Other' or choose a known chemical.");
+        return;
+      }
+      const chemNum = Number(chemicalAmount);
+      if (!chemicalAmount || isNaN(chemNum) || chemNum <= 0) {
+        setErrorMessage("Please enter a valid Chemical amount in grams (e.g. 50) when using an inorganic selection.");
+        return;
+      }
+    }
+
+    // If organic selected, require organic amount and 'other' name when applicable
+    if (organicOption) {
+      if (organicOption === "other" && !organicOther.trim()) {
+        setErrorMessage("Please specify the organic name for 'Other' or choose a known organic option.");
+        return;
+      }
+      const orgNum = Number(organicAmount);
+      if (!organicAmount || isNaN(orgNum) || orgNum <= 0) {
+        setErrorMessage("Please enter a valid Organic amount in grams when using an organic selection.");
+        return;
+      }
+    }
+
+    // Passed validation
+    setErrorMessage(null);
+    const params: Record<string, any> = {};
+    if (chemicalAmount) params.chemical_amount_g = Number(chemicalAmount);
+    if (waterAmount) params.water_amount_l = Number(waterAmount);
+    if (organicAmount) params.organic_amount_g = Number(organicAmount);
+    if (notes) params.notes = notes;
+    if (inorganicOption) params.inorganic = inorganicOption === "other" ? inorganicOther || "other" : inorganicOption;
+    if (organicOption) params.organic = organicOption === "other" ? organicOther || "other" : organicOption;
+    onUpload(selectedFile, Object.keys(params).length ? params : undefined);
   };
 
   // --- Calculator state ---
@@ -214,6 +258,7 @@ export default function Upload({ onUpload }: UploadProps) {
   const [organicOption, setOrganicOption] = useState<string>("");
   const [inorganicOther, setInorganicOther] = useState<string>("");
   const [organicOther, setOrganicOther] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleClear = () => {
     if (preview) URL.revokeObjectURL(preview);
@@ -253,6 +298,13 @@ export default function Upload({ onUpload }: UploadProps) {
           ? "Take a photo of the affected leaf or upload from your gallery"
           : "Use your camera to scan a leaf or upload an image file"}
       </p>
+
+      {errorMessage && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 flex items-start justify-between">
+          <div className="text-sm">{errorMessage}</div>
+          <button onClick={() => setErrorMessage(null)} className="ml-4 text-sm font-semibold text-red-700">Dismiss</button>
+        </div>
+      )}
 
       {/* ── Choose mode ─────────────────────────────── */}
       {mode === "choose" && (
