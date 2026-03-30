@@ -1,9 +1,15 @@
-deploy-to-hf:
-    needs: build-and-push
+name: Deploy to Hugging Face
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy-to-hf:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Hugging Face Restart
         run: |
           curl -X POST \
           -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" \
-          "https://huggingface.co/api/spaces/YOUR_HF_USERNAME/YOUR_SPACE_NAME/restart"
+          "https://huggingface.co/api/spaces/sudharshan59/crop-disease-ai/restart"
