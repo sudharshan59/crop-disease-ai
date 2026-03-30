@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 
 interface UploadProps {
-  onUpload: (file: File) => void;
+  onUpload: (file: File, treatmentParams?: Record<string, any>) => void;
 }
 
 type Mode = "choose" | "camera" | "preview";
@@ -193,8 +193,72 @@ export default function Upload({ onUpload }: UploadProps) {
 
   // ---------- Actions ----------
   const handleAnalyze = () => {
-    if (selectedFile) onUpload(selectedFile);
+    if (!selectedFile) {
+      setErrorMessage("Please upload or capture an image before analyzing.");
+      return;
+    }
+
+    // Require either inorganic or organic selection
+    if (!inorganicOption && !organicOption) {
+      setErrorMessage("Please select either an Inorganic (chemical) or Organic option before analysis.");
+      return;
+    }
+
+    // Require water amount
+    const waterNum = Number(waterAmount);
+    if (!waterAmount || isNaN(waterNum) || waterNum <= 0) {
+      setErrorMessage("Please enter a valid Water amount in liters (e.g. 10).");
+      return;
+    }
+
+    // If inorganic selected, require chemical amount and 'other' name when applicable
+    if (inorganicOption) {
+      if (inorganicOption === "other" && !inorganicOther.trim()) {
+        setErrorMessage("Please specify the chemical name for 'Other' or choose a known chemical.");
+        return;
+      }
+      const chemNum = Number(chemicalAmount);
+      if (!chemicalAmount || isNaN(chemNum) || chemNum <= 0) {
+        setErrorMessage("Please enter a valid Chemical amount in grams (e.g. 50) when using an inorganic selection.");
+        return;
+      }
+    }
+
+    // If organic selected, require organic amount and 'other' name when applicable
+    if (organicOption) {
+      if (organicOption === "other" && !organicOther.trim()) {
+        setErrorMessage("Please specify the organic name for 'Other' or choose a known organic option.");
+        return;
+      }
+      const orgNum = Number(organicAmount);
+      if (!organicAmount || isNaN(orgNum) || orgNum <= 0) {
+        setErrorMessage("Please enter a valid Organic amount in grams when using an organic selection.");
+        return;
+      }
+    }
+
+    // Passed validation
+    setErrorMessage(null);
+    const params: Record<string, any> = {};
+    if (chemicalAmount) params.chemical_amount_g = Number(chemicalAmount);
+    if (waterAmount) params.water_amount_l = Number(waterAmount);
+    if (organicAmount) params.organic_amount_g = Number(organicAmount);
+    if (notes) params.notes = notes;
+    if (inorganicOption) params.inorganic = inorganicOption === "other" ? inorganicOther || "other" : inorganicOption;
+    if (organicOption) params.organic = organicOption === "other" ? organicOther || "other" : organicOption;
+    onUpload(selectedFile, Object.keys(params).length ? params : undefined);
   };
+
+  // --- Calculator state ---
+  const [chemicalAmount, setChemicalAmount] = useState<number | string>("");
+  const [waterAmount, setWaterAmount] = useState<number | string>("");
+  const [organicAmount, setOrganicAmount] = useState<number | string>("");
+  const [notes, setNotes] = useState<string>("");
+  const [inorganicOption, setInorganicOption] = useState<string>("");
+  const [organicOption, setOrganicOption] = useState<string>("");
+  const [inorganicOther, setInorganicOther] = useState<string>("");
+  const [organicOther, setOrganicOther] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleClear = () => {
     if (preview) URL.revokeObjectURL(preview);
@@ -234,6 +298,7 @@ export default function Upload({ onUpload }: UploadProps) {
           ? "Take a photo of the affected leaf or upload from your gallery"
           : "Use your camera to scan a leaf or upload an image file"}
       </p>
+
 
       {/* ── Choose mode ─────────────────────────────── */}
       {mode === "choose" && (
@@ -502,6 +567,12 @@ export default function Upload({ onUpload }: UploadProps) {
             </button>
           </div>
 
+          {errorMessage && (
+            <div className="mt-3 mb-1 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3">
+              <div className="text-sm">{errorMessage}</div>
+            </div>
+          )}
+
           {selectedFile && (
             <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
               <div className="flex items-center gap-3">
@@ -515,6 +586,121 @@ export default function Upload({ onUpload }: UploadProps) {
                   <p className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{selectedFile.name}</p>
                   <p className="text-xs text-gray-500">{(selectedFile.size / 1024).toFixed(1)} KB</p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Simple calculator for treatment adjustments */}
+          {selectedFile && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-gray-600">Inorganic (chemical)</label>
+                <select
+                  value={inorganicOption}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setInorganicOption(v);
+                    if (v) {
+                      setOrganicOption("");
+                      setOrganicOther("");
+                      setOrganicAmount("");
+                    }
+                  }}
+                  className="mt-1 input w-full"
+                >
+                  <option value="">-- select --</option>
+                  <option value="mancozeb">Mancozeb</option>
+                  <option value="chlorothalonil">Chlorothalonil</option>
+                  <option value="azoxystrobin">Azoxystrobin</option>
+                  <option value="triazole">Triazole</option>
+                  <option value="copper">Copper hydroxide</option>
+                  <option value="other">Other (specify)</option>
+                </select>
+                {inorganicOption === "other" && (
+                  <input
+                    type="text"
+                    value={inorganicOther}
+                    onChange={(e) => setInorganicOther(e.target.value)}
+                    className="mt-2 input w-full"
+                    placeholder="Specify other chemical"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600">Organic</label>
+                <select
+                  value={organicOption}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setOrganicOption(v);
+                    if (v) {
+                      setInorganicOption("");
+                      setInorganicOther("");
+                      setChemicalAmount("");
+                    }
+                  }}
+                  className="mt-1 input w-full"
+                >
+                  <option value="">-- select --</option>
+                  <option value="neem_oil">Neem oil</option>
+                  <option value="bacillus_subtilis">Bacillus subtilis</option>
+                  <option value="trichoderma">Trichoderma spp.</option>
+                  <option value="compost_tea">Compost tea</option>
+                  <option value="other">Other (specify)</option>
+                </select>
+                {organicOption === "other" && (
+                  <input
+                    type="text"
+                    value={organicOther}
+                    onChange={(e) => setOrganicOther(e.target.value)}
+                    className="mt-2 input w-full"
+                    placeholder="Specify other organic"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600">Chemical (g)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={chemicalAmount}
+                  onChange={(e) => setChemicalAmount(e.target.value)}
+                  disabled={!!organicOption}
+                  className="mt-1 input w-full"
+                  placeholder="e.g. 50"
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="text-xs text-gray-600">Water (L)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={waterAmount}
+                  onChange={(e) => setWaterAmount(e.target.value)}
+                  className="mt-1 input w-full"
+                  placeholder="e.g. 10"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600">Organic (g)</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={organicAmount}
+                  onChange={(e) => setOrganicAmount(e.target.value)}
+                  disabled={!!inorganicOption}
+                  className="mt-1 input w-full"
+                  placeholder="optional"
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="text-xs text-gray-600">Notes (optional)</label>
+                <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 input w-full" placeholder="e.g. target concentration 0.5%" />
               </div>
             </div>
           )}

@@ -62,6 +62,14 @@ class RecommendationSchema(BaseModel):
         description="Diagnostic confidence level: Low / Medium / High",
         examples=["High"],
     )
+    sections: List[dict] = Field(
+        default_factory=list,
+        description="Optional structured sections for UI: id, title, summary, detail, bullets",
+    )
+    weekly_plan: List[dict] = Field(
+        default_factory=list,
+        description="Optional 4-week actionable plan: list of {week, actions} items",
+    )
 
 
 class PredictionResponse(BaseModel):
