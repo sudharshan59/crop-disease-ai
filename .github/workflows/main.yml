@@ -12,4 +12,4 @@ jobs:
         run: |
           curl -X POST \
           -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" \
-          "https://huggingface.co/api/spaces/sudharshan59/crop-disease-ai/restart"
+          "https://huggingface.co/api/spaces/sudharshan001/crop-disease-ai/restart"
