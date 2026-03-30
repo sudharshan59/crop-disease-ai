@@ -1,0 +1,9 @@
+deploy-to-hf:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Hugging Face Restart
+        run: |
+          curl -X POST \
+          -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" \
+          "https://huggingface.co/api/spaces/YOUR_HF_USERNAME/YOUR_SPACE_NAME/restart"
