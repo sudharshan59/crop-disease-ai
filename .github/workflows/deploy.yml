@@ -1,0 +1,38 @@
+name: CI/CD to Docker Hub and Hugging Face
+
+on:
+  push:
+    branches: [ "main" ] # Triggers on push to the main branch
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Tags the image with 'latest' and the specific commit hash for versioning
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/crop-disease-ai:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/crop-disease-ai:${{ github.sha }}
+
+  deploy-to-hf:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Hugging Face Restart
+        run: |
+          curl -X POST \
+          -H "Authorization: Bearer ${{ secrets.HF_TOKEN }}" \
+          "https://huggingface.co/api/spaces/sudharshan59/crop-disease-ai/restart"
