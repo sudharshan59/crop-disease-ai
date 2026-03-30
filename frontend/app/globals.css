@@ -4,18 +4,32 @@
 
 @layer base {
   :root {
+    --canopy-forest: #2d4a2b;
+    --canopy-sage: #7d8471;
+    --canopy-olive: #a4ac86;
+    --canopy-ivory: #faf9f6;
     --foreground: 20 14.3% 4.1%;
     --background: 0 0% 100%;
   }
 
   body {
-    @apply bg-gradient-to-br from-leaf-50 via-white to-soil-50 min-h-screen text-gray-900 antialiased;
+    font-family: FreeSans, Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    background: linear-gradient(180deg, var(--canopy-ivory) 0%, #fbfbf9 40%, #f6f7f2 100%);
+    color: var(--canopy-forest);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-2xl shadow-lg border border-gray-100 p-6;
+    background: var(--canopy-ivory);
+    border: 1px solid rgba(45,74,43,0.06);
+    box-shadow: 0 8px 24px rgba(45,74,43,0.06);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    color: var(--canopy-forest);
   }
 
   .card-hover {
@@ -23,25 +37,49 @@
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-leaf-600 text-white font-semibold rounded-xl
-           transition-all duration-200 hover:bg-leaf-700 active:bg-leaf-800
-           focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-leaf-600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--canopy-forest);
+    color: var(--canopy-ivory);
+    font-weight: 600;
+    border-radius: 0.75rem;
+    transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
+    box-shadow: 0 6px 18px rgba(45,74,43,0.12);
   }
+
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(45,74,43,0.14); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-3 bg-white text-leaf-700 font-semibold rounded-xl
-           border-2 border-leaf-200 transition-all duration-200
-           hover:bg-leaf-50 hover:border-leaf-300 active:bg-leaf-100
-           focus:outline-none focus:ring-2 focus:ring-leaf-500 focus:ring-offset-2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    background: transparent;
+    color: var(--canopy-forest);
+    font-weight: 600;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(45,74,43,0.08);
+    transition: background .15s ease, transform .12s ease;
   }
 
+  .btn-secondary:hover { background: rgba(164,172,134,0.08); transform: translateY(-1px); }
+
   .section-title {
-    @apply text-2xl font-bold text-gray-900 mb-2;
+    font-family: FreeSerif, Georgia, serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--canopy-forest);
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.01em;
   }
 
   .section-subtitle {
-    @apply text-gray-500 text-sm;
+    color: #6b6f63;
+    font-size: 0.9rem;
   }
 }
 

@@ -34,9 +34,17 @@ const config: Config = {
           800: "#5e3d25",
           900: "#4e3322",
         },
+        // Forest Canopy theme
+        canopy: {
+          green: "#2d4a2b", // Forest Green
+          sage: "#7d8471",
+          olive: "#a4ac86",
+          ivory: "#faf9f6",
+        },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["FreeSans", "Inter", "system-ui", "sans-serif"],
+        serif: ["FreeSerif", "Georgia", "serif"],
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
